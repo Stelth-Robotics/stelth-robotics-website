@@ -3,3 +3,4 @@
 
 export const SITE_TITLE = "Stelth Robotics";
 export const SITE_DESCRIPTION = "Welcome to Stelth Robotics!";
+export const SITE_STATEMENT = "Robotic Arms for Everyone";
