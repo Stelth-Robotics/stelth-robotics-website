@@ -1,0 +1,63 @@
+---
+/** Abstract arm schematic — subtle visual hint, no product details. */
+---
+
+<svg
+	class="arm-schematic"
+	viewBox="0 0 320 280"
+	fill="none"
+	xmlns="http://www.w3.org/2000/svg"
+	aria-hidden="true"
+>
+	<circle cx="160" cy="230" r="48" class="ring" />
+	<circle cx="160" cy="230" r="8" class="joint joint-base" />
+
+	<path d="M160 230 L160 170" class="segment segment-a" />
+	<circle cx="160" cy="170" r="6" class="joint" />
+
+	<path d="M160 170 L220 120" class="segment segment-b" />
+	<circle cx="220" cy="120" r="5" class="joint" />
+
+	<path d="M220 120 L260 80" class="segment segment-c" />
+	<circle cx="260" cy="80" r="4" class="joint" />
+
+	<path d="M260 80 L290 55" class="segment segment-d" />
+	<circle cx="290" cy="55" r="3.5" class="joint joint-tip" />
+</svg>
+
+<style>
+	.arm-schematic {
+		width: min(260px, 60vw);
+		height: auto;
+		display: block;
+		margin: 0 auto;
+		opacity: 0.85;
+	}
+
+	.ring {
+		stroke: var(--accent);
+		stroke-width: 1;
+		opacity: 0.15;
+		fill: none;
+	}
+
+	.segment {
+		stroke: var(--accent);
+		stroke-width: 2.5;
+		stroke-linecap: round;
+		opacity: 0.7;
+	}
+
+	.joint {
+		fill: var(--bg);
+		stroke: var(--accent);
+		stroke-width: 1.5;
+		opacity: 0.8;
+	}
+
+	.joint-base,
+	.joint-tip {
+		fill: var(--accent);
+		opacity: 0.5;
+	}
+</style>

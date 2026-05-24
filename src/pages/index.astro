@@ -1,6 +1,15 @@
 ---
 import BaseHead from '../components/BaseHead.astro';
-import { SITE_TITLE, SITE_DESCRIPTION, SITE_TAGLINE, WAITLIST_URL } from '../consts';
+import ArmSchematic from '../components/ArmSchematic.astro';
+import {
+	SITE_TITLE,
+	SITE_DESCRIPTION,
+	SITE_TAGLINE,
+	SITE_LEDE,
+	WAITLIST_URL,
+	LOCATION,
+	INTRIGUE_CHIPS,
+} from '../consts';
 
 const year = new Date().getFullYear();
 ---
@@ -45,17 +54,24 @@ const year = new Date().getFullYear();
 			</header>
 
 			<main class="hero">
+				<ArmSchematic />
+
 				<h1>{SITE_TAGLINE}</h1>
-				<p class="lede">
-					We build precision robotic systems — engineered to perform, priced to matter.
-				</p>
+				<p class="lede">{SITE_LEDE}</p>
+
+				<ul class="chips" aria-label="Status">
+					{INTRIGUE_CHIPS.map((chip) => (
+						<li>{chip}</li>
+					))}
+				</ul>
+
 				<a class="cta" href={WAITLIST_URL} target="_blank" rel="noopener noreferrer">
 					Stay in the loop
 				</a>
 			</main>
 
 			<footer class="footer">
-				<p>&copy; {year} Stelth Robotics</p>
+				<p>&copy; {year} Stelth Robotics · {LOCATION}</p>
 			</footer>
 		</div>
 	</body>
@@ -74,7 +90,7 @@ const year = new Date().getFullYear();
 		position: absolute;
 		border-radius: 50%;
 		filter: blur(90px);
-		opacity: 0.55;
+		opacity: 0.45;
 		will-change: transform;
 	}
 
@@ -108,8 +124,8 @@ const year = new Date().getFullYear();
 		top: 40%;
 		left: 50%;
 		transform: translateX(-50%);
-		background: radial-gradient(circle, #0d4a4a 0%, transparent 70%);
-		opacity: 0.35;
+		background: radial-gradient(circle, #1a3050 0%, transparent 70%);
+		opacity: 0.3;
 		animation: drift-c 18s ease-in-out infinite;
 	}
 
@@ -147,8 +163,8 @@ const year = new Date().getFullYear();
 
 	.wordmark {
 		font-size: 0.8125rem;
-		font-weight: 500;
-		letter-spacing: 0.12em;
+		font-weight: 700;
+		letter-spacing: 0.1em;
 		text-transform: uppercase;
 		color: var(--text-muted);
 	}
@@ -179,21 +195,44 @@ const year = new Date().getFullYear();
 		padding: 2rem 0 4rem;
 	}
 
+	.hero :global(.arm-schematic) {
+		margin-bottom: 2.5rem;
+	}
+
 	.hero h1 {
 		margin: 0 0 1.25rem;
-		font-size: clamp(2rem, 5vw, 3rem);
-		font-weight: 600;
-		line-height: 1.15;
-		letter-spacing: -0.025em;
+		font-size: clamp(2rem, 5vw, 2.75rem);
+		font-weight: 700;
+		line-height: 1.2;
+		letter-spacing: -0.02em;
 		color: var(--text);
 	}
 
 	.lede {
-		margin: 0 0 2.5rem;
+		margin: 0 0 1.75rem;
 		font-size: 1.125rem;
 		line-height: 1.65;
 		color: var(--text-muted);
 		max-width: 28rem;
+	}
+
+	.chips {
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: center;
+		gap: 0.625rem;
+		margin: 0 0 2rem;
+		padding: 0;
+		list-style: none;
+	}
+
+	.chips li {
+		padding: 0.375rem 0.875rem;
+		font-size: 0.8125rem;
+		color: var(--text-muted);
+		border: 1px solid rgba(255, 255, 255, 0.1);
+		border-radius: 999px;
+		background: rgba(255, 255, 255, 0.04);
 	}
 
 	.cta {
@@ -202,7 +241,7 @@ const year = new Date().getFullYear();
 		justify-content: center;
 		padding: 0.8125rem 1.75rem;
 		font-size: 0.9375rem;
-		font-weight: 500;
+		font-weight: 700;
 		text-decoration: none;
 		color: var(--text);
 		background: rgba(255, 255, 255, 0.06);
@@ -218,7 +257,7 @@ const year = new Date().getFullYear();
 	.cta:hover {
 		background: rgba(255, 255, 255, 0.1);
 		border-color: rgba(255, 255, 255, 0.22);
-		box-shadow: 0 0 32px var(--accent-glow);
+		box-shadow: 0 0 24px var(--accent-glow);
 	}
 
 	.footer {
@@ -239,7 +278,7 @@ const year = new Date().getFullYear();
 			transform: translate(0, 0) scale(1);
 		}
 		50% {
-			transform: translate(6%, 8%) scale(1.08);
+			transform: translate(6%, 8%) scale(1.05);
 		}
 	}
 
@@ -249,7 +288,7 @@ const year = new Date().getFullYear();
 			transform: translate(0, 0) scale(1);
 		}
 		50% {
-			transform: translate(-5%, -6%) scale(1.05);
+			transform: translate(-5%, -6%) scale(1.03);
 		}
 	}
 
@@ -265,7 +304,7 @@ const year = new Date().getFullYear();
 
 	@media (max-width: 480px) {
 		.page {
-			padding: 1.25rem 1.25rem;
+			padding: 1.25rem;
 		}
 
 		.lede {
