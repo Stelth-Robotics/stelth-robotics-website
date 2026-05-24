@@ -1,6 +1,5 @@
-// Place any global data in this file.
-// You can import this data from anywhere in your site by using the `import` keyword.
-
 export const SITE_TITLE = "Stelth Robotics";
-export const SITE_DESCRIPTION = "Welcome to Stelth Robotics!";
-export const SITE_STATEMENT = "Robotic Arms for Everyone";
+export const SITE_DESCRIPTION =
+	"High-quality robotics, within reach. Precision robotic systems engineered for performance and accessibility.";
+export const SITE_TAGLINE = "High-quality robotics, within reach.";
+export const WAITLIST_URL = "https://forms.office.com/r/tBDJrsunn1";

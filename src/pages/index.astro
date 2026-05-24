@@ -1,54 +1,275 @@
 ---
-import MainLayout from '../layouts/Main.astro';
-import { SITE_TITLE, SITE_DESCRIPTION, SITE_STATEMENT } from '../consts';
+import BaseHead from '../components/BaseHead.astro';
+import { SITE_TITLE, SITE_DESCRIPTION, SITE_TAGLINE, WAITLIST_URL } from '../consts';
 
-const heroImages = [
-  "/PCB_Assembly.jpg",
-  "/Motor.jpg",
-  "/3_Motors.jpg"
-];
+const year = new Date().getFullYear();
 ---
-<MainLayout title={SITE_TITLE} description={SITE_DESCRIPTION} statement={SITE_STATEMENT} heroImages={heroImages}>
-	<main>
-		<p>
-			In a future with millions of humanoids there will be an even greater number of stationary arms.
-			The gap between the rising demand for goods and a falling labor participation rate will be 
-			fulfilled by humanoids overseeing many stationary arms performing repetitive labor tasks.
-			Stelth Robotics is building stationary arms to compliment humanoids in the creation of an abundant future.
-		</p>
-		<hr />
-		<h2><a href={`/alpha-mini`}>Alpha-Mini</a></h2>
-		<p>
-			A 4dof robotic arm with made in North America that doesn't break the bank. Designed for desktop automation
-			tasks, light assembly, and educational purposes.
-		</p>
-		<ul>
-			<li>500mm maximum reach</li>
-			<li>DC Motor Driven</li>
-			<li>Magnetic joint position sensing</li>
-			<li>STM32C0 MCU's in every joint </li>
-			<li>Available for purchase fall 2026</li>
-			<li>Launch day price of $999</li>
-		</ul>
-		<hr />
-		<h2>Alpha</h2>
-		<p>
-			A 4dof robotic arm made for the real world. Designed for indoor and outdoor consumer use, 
-			residential, and industrial settings.
-		</p>
-		<ul>
-			<li>2000mm maximum reach</li>
-			<li>DC Motor Driven</li>
-			<li>CAN & Ethernet communication protocals</li>
-			<li>STM32C0 MCU's in every joint </li>
-			<li>Available for purchase fall 2027</li>
-		</ul>
-		<hr />
-		<h2>Stay Updated</h2>
-		<p>
-			Want to stay updated on our progress and be the first to hear the big announcements?
-			Join the mailing list <a href="https://forms.office.com/r/tBDJrsunn1" target="_blank" rel="noopener">here.</a>
-		</p>
-		
-	</main>
-</MainLayout>
+
+<!doctype html>
+<html lang="en">
+	<head>
+		<BaseHead title={SITE_TITLE} description={SITE_DESCRIPTION} />
+	</head>
+	<body>
+		<div class="background" aria-hidden="true">
+			<div class="orb orb-a"></div>
+			<div class="orb orb-b"></div>
+			<div class="orb orb-c"></div>
+			<div class="grid"></div>
+			<div class="noise"></div>
+		</div>
+
+		<div class="page">
+			<header class="header">
+				<span class="wordmark">{SITE_TITLE}</span>
+				<div class="social">
+					<a href="https://x.com/StelthRobotics" target="_blank" rel="noopener noreferrer">
+						<span class="sr-only">Follow on X</span>
+						<svg viewBox="0 0 16 16" aria-hidden="true" width="18" height="18">
+							<path
+								fill="currentColor"
+								d="M5.026 15c6.038 0 9.341-5.003 9.341-9.334 0-.14 0-.282-.006-.422A6.685 6.685 0 0 0 16 3.542a6.658 6.658 0 0 1-1.889.518 3.301 3.301 0 0 0 1.447-1.817 6.533 6.533 0 0 1-2.087.793A3.286 3.286 0 0 0 7.875 6.03a9.325 9.325 0 0 1-6.767-3.429 3.289 3.289 0 0 0 1.018 4.382A3.323 3.323 0 0 1 .64 6.575v.045a3.288 3.288 0 0 0 2.632 3.218 3.203 3.203 0 0 1-.865.115 3.23 3.23 0 0 1-.614-.057 3.283 3.283 0 0 0 3.067 2.277A6.588 6.588 0 0 1 .78 13.58a6.32 6.32 0 0 1-.78-.045A9.344 9.344 0 0 0 5.026 15z"
+							></path>
+						</svg>
+					</a>
+					<a href="https://github.com/Stelth-Robotics" target="_blank" rel="noopener noreferrer">
+						<span class="sr-only">GitHub</span>
+						<svg viewBox="0 0 16 16" aria-hidden="true" width="18" height="18">
+							<path
+								fill="currentColor"
+								d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.012 8.012 0 0 0 16 8c0-4.42-3.58-8-8-8z"
+							></path>
+						</svg>
+					</a>
+				</div>
+			</header>
+
+			<main class="hero">
+				<h1>{SITE_TAGLINE}</h1>
+				<p class="lede">
+					We build precision robotic systems — engineered to perform, priced to matter.
+				</p>
+				<a class="cta" href={WAITLIST_URL} target="_blank" rel="noopener noreferrer">
+					Stay in the loop
+				</a>
+			</main>
+
+			<footer class="footer">
+				<p>&copy; {year} Stelth Robotics</p>
+			</footer>
+		</div>
+	</body>
+</html>
+
+<style>
+	.background {
+		position: fixed;
+		inset: 0;
+		z-index: 0;
+		overflow: hidden;
+		background: var(--bg);
+	}
+
+	.orb {
+		position: absolute;
+		border-radius: 50%;
+		filter: blur(90px);
+		opacity: 0.55;
+		will-change: transform;
+	}
+
+	.orb-a {
+		width: 55vw;
+		height: 55vw;
+		max-width: 520px;
+		max-height: 520px;
+		top: -12%;
+		left: -8%;
+		background: radial-gradient(circle, #1a3a6e 0%, transparent 70%);
+		animation: drift-a 22s ease-in-out infinite;
+	}
+
+	.orb-b {
+		width: 45vw;
+		height: 45vw;
+		max-width: 440px;
+		max-height: 440px;
+		bottom: -10%;
+		right: -6%;
+		background: radial-gradient(circle, #2a1f5c 0%, transparent 70%);
+		animation: drift-b 26s ease-in-out infinite;
+	}
+
+	.orb-c {
+		width: 30vw;
+		height: 30vw;
+		max-width: 280px;
+		max-height: 280px;
+		top: 40%;
+		left: 50%;
+		transform: translateX(-50%);
+		background: radial-gradient(circle, #0d4a4a 0%, transparent 70%);
+		opacity: 0.35;
+		animation: drift-c 18s ease-in-out infinite;
+	}
+
+	.grid {
+		position: absolute;
+		inset: 0;
+		background-image:
+			linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+			linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+		background-size: 64px 64px;
+		mask-image: radial-gradient(ellipse 70% 60% at 50% 45%, black 20%, transparent 75%);
+	}
+
+	.noise {
+		position: absolute;
+		inset: 0;
+		opacity: 0.04;
+		background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+	}
+
+	.page {
+		position: relative;
+		z-index: 1;
+		display: flex;
+		flex-direction: column;
+		min-height: 100dvh;
+		padding: 1.5rem 1.75rem;
+	}
+
+	.header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+	}
+
+	.wordmark {
+		font-size: 0.8125rem;
+		font-weight: 500;
+		letter-spacing: 0.12em;
+		text-transform: uppercase;
+		color: var(--text-muted);
+	}
+
+	.social {
+		display: flex;
+		gap: 1rem;
+	}
+
+	.social a {
+		color: var(--text-muted);
+		transition: color 0.2s ease;
+	}
+
+	.social a:hover {
+		color: var(--text);
+	}
+
+	.hero {
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		justify-content: center;
+		align-items: center;
+		text-align: center;
+		max-width: 36rem;
+		margin: 0 auto;
+		padding: 2rem 0 4rem;
+	}
+
+	.hero h1 {
+		margin: 0 0 1.25rem;
+		font-size: clamp(2rem, 5vw, 3rem);
+		font-weight: 600;
+		line-height: 1.15;
+		letter-spacing: -0.025em;
+		color: var(--text);
+	}
+
+	.lede {
+		margin: 0 0 2.5rem;
+		font-size: 1.125rem;
+		line-height: 1.65;
+		color: var(--text-muted);
+		max-width: 28rem;
+	}
+
+	.cta {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		padding: 0.8125rem 1.75rem;
+		font-size: 0.9375rem;
+		font-weight: 500;
+		text-decoration: none;
+		color: var(--text);
+		background: rgba(255, 255, 255, 0.06);
+		border: 1px solid rgba(255, 255, 255, 0.12);
+		border-radius: 999px;
+		backdrop-filter: blur(12px);
+		transition:
+			background 0.2s ease,
+			border-color 0.2s ease,
+			box-shadow 0.2s ease;
+	}
+
+	.cta:hover {
+		background: rgba(255, 255, 255, 0.1);
+		border-color: rgba(255, 255, 255, 0.22);
+		box-shadow: 0 0 32px var(--accent-glow);
+	}
+
+	.footer {
+		text-align: center;
+		padding-top: 1rem;
+	}
+
+	.footer p {
+		margin: 0;
+		font-size: 0.8125rem;
+		color: var(--text-muted);
+		opacity: 0.7;
+	}
+
+	@keyframes drift-a {
+		0%,
+		100% {
+			transform: translate(0, 0) scale(1);
+		}
+		50% {
+			transform: translate(6%, 8%) scale(1.08);
+		}
+	}
+
+	@keyframes drift-b {
+		0%,
+		100% {
+			transform: translate(0, 0) scale(1);
+		}
+		50% {
+			transform: translate(-5%, -6%) scale(1.05);
+		}
+	}
+
+	@keyframes drift-c {
+		0%,
+		100% {
+			transform: translateX(-50%) translateY(0);
+		}
+		50% {
+			transform: translateX(-50%) translateY(-4%);
+		}
+	}
+
+	@media (max-width: 480px) {
+		.page {
+			padding: 1.25rem 1.25rem;
+		}
+
+		.lede {
+			font-size: 1rem;
+		}
+	}
+</style>
