@@ -1,5 +1,9 @@
 ---
-/** Abstract arm schematic — subtle visual hint, no product details. */
+import { LINK_LENGTHS } from '../lib/armKinematics';
+
+const BASE = { x: 160, y: 230 };
+const LINKS = [...LINK_LENGTHS];
+const BLOCK = 14;
 ---
 
 <svg
@@ -9,29 +13,644 @@
 	xmlns="http://www.w3.org/2000/svg"
 	aria-hidden="true"
 >
-	<circle cx="160" cy="230" r="48" class="ring" />
-	<circle cx="160" cy="230" r="8" class="joint joint-base" />
+	<g class="shelf">
+		<rect class="shelf-board" x="48" y="144" width="76" height="6" rx="1" />
+		<line class="shelf-bracket" x1="52" y1="150" x2="52" y2="158" />
+		<line class="shelf-bracket" x1="120" y1="150" x2="120" y2="158" />
+	</g>
 
-	<path d="M160 230 L160 170" class="segment segment-a" />
-	<circle cx="160" cy="170" r="6" class="joint" />
+	<g class="source-zone">
+		<rect class="source-pad" x="208" y="248" width="56" height="18" rx="2" />
+	</g>
 
-	<path d="M160 170 L220 120" class="segment segment-b" />
-	<circle cx="220" cy="120" r="5" class="joint" />
+	<g class="blocks-layer">
+		<rect class="block" data-block="0" width={BLOCK} height={BLOCK} rx="2" />
+		<rect class="block" data-block="1" width={BLOCK} height={BLOCK} rx="2" />
+		<rect class="block" data-block="2" width={BLOCK} height={BLOCK} rx="2" />
+	</g>
 
-	<path d="M220 120 L260 80" class="segment segment-c" />
-	<circle cx="260" cy="80" r="4" class="joint" />
+	<circle cx={BASE.x} cy={BASE.y} r="48" class="ring" />
+	<circle cx={BASE.x} cy={BASE.y} r="8" class="joint joint-base" />
 
-	<path d="M260 80 L290 55" class="segment segment-d" />
-	<circle cx="290" cy="55" r="3.5" class="joint joint-tip" />
+	<g class="arm-chain" transform={`translate(${BASE.x} ${BASE.y})`}>
+		<g class="link" data-index="0" transform="rotate(-90)">
+			<line class="segment" x1="0" y1="0" x2={LINKS[0]} y2="0" />
+			<circle class="joint" cx={LINKS[0]} cy="0" r="6" />
+			<g class="link" data-index="1" data-offset={LINKS[0]} transform={`translate(${LINKS[0]} 0) rotate(50.2)`}>
+				<line class="segment" x1="0" y1="0" x2={LINKS[1]} y2="0" />
+				<circle class="joint" cx={LINKS[1]} cy="0" r="5" />
+				<g class="link" data-index="2" data-offset={LINKS[1]} transform={`translate(${LINKS[1]} 0) rotate(-5.2)`}>
+					<line class="segment" x1="0" y1="0" x2={LINKS[2]} y2="0" />
+					<circle class="joint" cx={LINKS[2]} cy="0" r="4" />
+					<g class="link" data-index="3" data-offset={LINKS[2]} transform={`translate(${LINKS[2]} 0) rotate(5.2)`}>
+						<line class="segment" x1="0" y1="0" x2={LINKS[3]} y2="0" />
+						<circle class="joint joint-tip" cx={LINKS[3]} cy="0" r="3.5" />
+						<rect
+							class="block block-carried"
+							data-carried
+							x={LINKS[3] - BLOCK / 2}
+							y={-BLOCK / 2}
+							width={BLOCK}
+							height={BLOCK}
+							rx="2"
+							opacity="0"
+						/>
+					</g>
+				</g>
+			</g>
+		</g>
+	</g>
 </svg>
+
+<script>
+	import {
+		fkDeg,
+		ikDeg,
+		lerpPose,
+		smoothstep,
+		samplePath,
+		pathDuration,
+		pathSegmentAt,
+		normAngleDeg,
+		rateLimitJoints,
+		smoothFollowJoints,
+		HOME_ANGLES,
+	} from '../lib/armKinematics';
+
+	const START_DELAY_MS = 1100;
+	const RETRACT_MS = 720;
+	const PATH_TIME = 0.8;
+
+	/** Tip must be this close to block center before pick/place (px). */
+	const TCP_EPS = 2;
+	const PLACE_PHI_TOL = 10;
+	const PICK_HOLD_MS = 280;
+	const PLACE_HOLD_MS = 280;
+	const PICK_DWELL_MS = 200;
+	const PLACE_DWELL_MS = 200;
+	const POST_GRASP_MS = 140;
+	const POST_RELEASE_MS = 160;
+	/** Pause path clock while the tip trails the commanded pose. */
+	const PATH_LAG_FREEZE = 18;
+
+	const BASE = { x: 160, y: 230 };
+	const BLOCK = 14;
+	const TRAVEL_Y = 98;
+	const LIFT = 22;
+	/** Level gripper angle so blocks sit square on shelf / pile (degrees). */
+	const PLACE_PHI = 0;
+	const PICK_PHI = 0;
+	const SOURCE = [
+		{ x: 235, y: 238 },
+		{ x: 222, y: 252 },
+		{ x: 248, y: 252 },
+	];
+
+	const SHELF = [
+		{ x: 70, y: 136 },
+		{ x: 94, y: 136 },
+		{ x: 82, y: 120 },
+	];
+
+	const HOME_POSE = fkDeg(HOME_ANGLES);
+
+	function relPoint(p) {
+		return { x: p.x - BASE.x, y: p.y - BASE.y };
+	}
+
+	/** Tip target at block center (same point used for pick, carry, and place). */
+	function blockTcp(world, phi) {
+		const p = relPoint(world);
+		return { x: p.x, y: p.y, phi };
+	}
+
+	function pathMs(ms) {
+		return Math.round(ms * PATH_TIME);
+	}
+
+	function buildPath(pickWorld, placeWorld) {
+		const pick = blockTcp(pickWorld, PICK_PHI);
+		const place = blockTcp(placeWorld, PLACE_PHI);
+		const ty = TRAVEL_Y - BASE.y;
+		const viaX = pick.x * 0.4 + place.x * 0.6;
+		const blendPhi = PICK_PHI * 0.35 + PLACE_PHI * 0.65;
+
+		return [
+			{ pose: { x: pick.x, y: pick.y - LIFT, phi: PICK_PHI }, ms: pathMs(580), linear: true, cruise: true },
+			{ pose: pick, ms: pathMs(440), linear: true, easeOut: true },
+			{ pose: pick, ms: pathMs(PICK_HOLD_MS), linear: true, tag: 'grasp', tagAt: 0.98 },
+			{ pose: { x: pick.x, y: pick.y - LIFT, phi: PICK_PHI }, ms: pathMs(460), linear: true, cruise: true },
+			{ pose: { x: pick.x, y: ty, phi: PICK_PHI }, ms: pathMs(620), linear: true, cruise: true },
+			{ pose: { x: viaX, y: ty, phi: blendPhi }, ms: pathMs(540), linear: true, cruise: true },
+			{ pose: { x: place.x, y: ty, phi: PLACE_PHI }, ms: pathMs(620), linear: true, cruise: true },
+			{ pose: { x: place.x, y: place.y - LIFT, phi: PLACE_PHI }, ms: pathMs(580), linear: true, cruise: true },
+			{
+				pose: { x: place.x, y: place.y - LIFT * 0.45, phi: PLACE_PHI },
+				ms: pathMs(500),
+				linear: true,
+				easeOut: true,
+			},
+			{ pose: place, ms: pathMs(440), linear: true, easeOut: true },
+			{ pose: place, ms: pathMs(PLACE_HOLD_MS), linear: true, tag: 'release', tagAt: 0.98 },
+		];
+	}
+
+	function applyArm(svg, q) {
+		for (const link of svg.querySelectorAll('.link[data-index]')) {
+			const i = Number(link.dataset.index);
+			const angle = q[i];
+			const offset = link.dataset.offset;
+			link.setAttribute(
+				'transform',
+				i === 0 ? `rotate(${angle})` : `translate(${offset} 0) rotate(${angle})`,
+			);
+		}
+	}
+
+	function setBlock(el, cx, cy, opacity = 1) {
+		const h = BLOCK / 2;
+		el.setAttribute('x', String(cx - h));
+		el.setAttribute('y', String(cy - h));
+		el.setAttribute('opacity', String(opacity));
+	}
+
+	function initPickPlace(svg) {
+		if (svg.dataset.armInit === '1') return;
+		svg.dataset.armInit = '1';
+
+		const blocks = [...svg.querySelectorAll('.block[data-block]')];
+		const carried = svg.querySelector('.block-carried');
+		const placed = [false, false, false];
+
+		let q = [...HOME_ANGLES];
+		let mode = 'warmup';
+		let job = 0;
+		let path = [];
+		let pathStart = 0;
+		let firedTags = new Set();
+		let phaseStart = performance.now();
+		let lastTick = performance.now();
+		let blocksReset = false;
+		let retracting = false;
+		let retractStart = 0;
+		let retractFromPose = HOME_POSE;
+		let pathHoldUntil = 0;
+		let pathHoldElapsed = 0;
+		let placeDwellStart = 0;
+		let pickDwellStart = 0;
+		let pendingRetract = false;
+		let cycleComplete = false;
+		let runEaseUntil = 0;
+		const DUR = { intro: 480, hold: 480, fade: 820, wave: 1400, resetPause: 720, cycleIntro: 520 };
+		const WAVE_SETTLE_MS = 420;
+
+		function tipLag(pose) {
+			const tip = fkDeg(q);
+			return Math.hypot(tip.x - pose.x, tip.y - pose.y);
+		}
+
+		function tipNearTcp(pose, eps = TCP_EPS) {
+			return tipLag(pose) <= eps;
+		}
+
+		function tipAtTcp(pose, phiTarget) {
+			const tip = fkDeg(q);
+			return (
+				tipNearTcp(pose, TCP_EPS) &&
+				Math.abs(normAngleDeg(phiTarget - tip.phi)) <= PLACE_PHI_TOL
+			);
+		}
+
+		function poseNear(a, b, eps = 2) {
+			return Math.hypot(a.x - b.x, a.y - b.y) <= eps;
+		}
+
+		function pathElapsedFor(elapsed, now) {
+			if (pathHoldUntil > now) return pathHoldElapsed;
+			pathHoldElapsed = elapsed;
+			return elapsed;
+		}
+
+		function freezePath(elapsed, now, ms) {
+			pathHoldElapsed = elapsed;
+			pathHoldUntil = now + ms;
+			/* Keep path pose frozen without jumping when hold ends. */
+			pathStart += ms;
+		}
+
+		function onPickHoldSegment(elapsed) {
+			if (firedTags.has('grasp')) return false;
+			const pick = blockTcp(sourcePos(job), PICK_PHI);
+			const { index } = pathSegmentAt(path, elapsed);
+			const poses = path.map((w) => w.pose);
+			const p1 = poses[index];
+			const p2 = poses[Math.min(index + 1, poses.length - 1)];
+			return poseNear(p1, pick, 2) && poseNear(p2, pick, 2) && poseNear(p1, p2, 0.5);
+		}
+
+		function isTransitPose(pose) {
+			const ty = TRAVEL_Y - BASE.y;
+			return Math.abs(pose.y - ty) < 16;
+		}
+
+		function syncPathToArmLag(target, dt, now) {
+			if (now < runEaseUntil || pathHoldUntil > now || firedTags.has('grasp')) return;
+			if (isTransitPose(target)) return;
+			if (tipLag(target) > PATH_LAG_FREEZE) pathStart += dt;
+		}
+
+		function onPlaceHoldSegment(elapsed, place) {
+			if (!firedTags.has('grasp') || firedTags.has('release')) return false;
+			const { index } = pathSegmentAt(path, elapsed);
+			const poses = path.map((w) => w.pose);
+			const p1 = poses[index];
+			const p2 = poses[Math.min(index + 1, poses.length - 1)];
+			return poseNear(p1, place, 2) && poseNear(p2, place, 2) && poseNear(p1, p2, 0.5);
+		}
+
+		function moveArm(targetPose, dt, ikIter = 32, snap = false, now = performance.now()) {
+			const lag = tipLag(targetPose);
+			const easing = now < runEaseUntil;
+			const pose =
+				lag > 18 && !easing
+					? { x: targetPose.x, y: targetPose.y, phi: fkDeg(q).phi }
+					: targetPose;
+			const goal = ikDeg(pose, q, lag > 18 && !easing ? 40 : ikIter);
+			const tau = snap ? 48 : easing ? 95 : lag > 24 ? 68 : 82;
+			let next = smoothFollowJoints(q, goal, dt, tau);
+			const capScale = snap ? 2.2 : easing ? 1.15 : 1 + Math.min(0.5, lag / 34);
+			q = rateLimitJoints(q, next, dt, capScale);
+			applyArm(svg, q);
+		}
+
+		function placeRetractPose() {
+			const place = blockTcp(SHELF[job], PLACE_PHI);
+			return { x: place.x, y: TRAVEL_Y - BASE.y, phi: PLACE_PHI };
+		}
+
+		function sourcePos(i) {
+			return { x: SOURCE[i].x, y: SOURCE[i].y };
+		}
+
+		function resetSourceBlocks(opacity = 1) {
+			placed.fill(false);
+			for (let i = 0; i < 3; i++) {
+				blocks[i].style.display = '';
+				blocks[i].removeAttribute('transform');
+				setBlock(blocks[i], sourcePos(i).x, sourcePos(i).y, opacity);
+			}
+			carried.setAttribute('opacity', '0');
+		}
+
+		function startNextCycle(now) {
+			placed.fill(false);
+			blocksReset = false;
+			job = 0;
+			path = [];
+			firedTags = new Set();
+			retracting = false;
+			pendingRetract = false;
+			pathHoldUntil = 0;
+			pathHoldElapsed = 0;
+			placeDwellStart = 0;
+			pickDwellStart = 0;
+			carried.setAttribute('opacity', '0');
+			resetSourceBlocks(0);
+			q = [...HOME_ANGLES];
+			applyArm(svg, q);
+			cycleComplete = true;
+			mode = 'cycleIntro';
+			phaseStart = now;
+		}
+
+		function finishJob() {
+			if (job < 2) {
+				beginJob(job + 1, fkDeg(q));
+			} else {
+				mode = 'hold';
+				phaseStart = performance.now();
+			}
+		}
+
+		function beginJob(index, chainFrom = null) {
+			job = index;
+			path = buildPath(sourcePos(index), SHELF[index]);
+			if (chainFrom) {
+				const hover = path[0].pose;
+				const dx = chainFrom.x - hover.x;
+				const dy = chainFrom.y - hover.y;
+				const reachScale = index >= 2 ? 10.5 : 7;
+				let bridgeMs = pathMs(
+					Math.min(1500, Math.max(480, Math.hypot(dx, dy) * reachScale)),
+				);
+				if (index === 0 && !cycleComplete) {
+					bridgeMs = Math.max(bridgeMs, pathMs(1050));
+				}
+				const approachBoost = index >= 2 ? 1.7 : 1.45;
+				const tail = path.slice(1).map((wp, i) =>
+					i <= 3 ? { ...wp, ms: Math.round(wp.ms * approachBoost) } : wp,
+				);
+				const bridge = [
+					{
+						pose: chainFrom,
+						ms: bridgeMs,
+						linear: true,
+						cruise: true,
+						easeIn: index === 0 && !cycleComplete,
+					},
+					{ pose: hover, ms: pathMs(index >= 2 ? 600 : 520), linear: true, cruise: true },
+				];
+				if (index >= 2) {
+					const via = {
+						x: chainFrom.x * 0.25 + hover.x * 0.75,
+						y: Math.min(chainFrom.y + 28, hover.y - 12),
+						phi: PICK_PHI,
+					};
+					bridge.splice(1, 0, { pose: via, ms: pathMs(480), linear: true, cruise: true });
+				}
+				path = [...bridge, ...tail];
+			}
+			firedTags = new Set();
+			retracting = false;
+			placeDwellStart = 0;
+			pickDwellStart = 0;
+			pendingRetract = false;
+			pathHoldUntil = 0;
+			carried.setAttribute('opacity', '0');
+			if (!placed[job]) {
+				blocks[job].style.display = '';
+				setBlock(blocks[job], sourcePos(job).x, sourcePos(job).y, 1);
+			}
+			pathStart = performance.now();
+			runEaseUntil = performance.now() + (index === 0 && chainFrom ? 520 : 0);
+			mode = 'run';
+		}
+
+		function tryGrasp(elapsed, now) {
+			if (firedTags.has('grasp')) return;
+			const pick = blockTcp(sourcePos(job), PICK_PHI);
+
+			if (!onPickHoldSegment(elapsed) || !tipAtTcp(pick, PICK_PHI)) {
+				pickDwellStart = 0;
+				return;
+			}
+
+			if (pickDwellStart === 0) pickDwellStart = now;
+			if (now - pickDwellStart < PICK_DWELL_MS) return;
+
+			firedTags.add('grasp');
+			carried.setAttribute('opacity', '1');
+			blocks[job].style.display = 'none';
+			pickDwellStart = 0;
+			freezePath(elapsed, now, POST_GRASP_MS);
+		}
+
+		function tryRelease(elapsed, now) {
+			if (!firedTags.has('grasp') || firedTags.has('release')) return;
+			const place = blockTcp(SHELF[job], PLACE_PHI);
+
+			if (!onPlaceHoldSegment(elapsed, place) || !tipAtTcp(place, PLACE_PHI)) {
+				placeDwellStart = 0;
+				return;
+			}
+
+			if (placeDwellStart === 0) placeDwellStart = now;
+			if (now - placeDwellStart < PLACE_DWELL_MS) return;
+
+			firedTags.add('release');
+			carried.setAttribute('opacity', '0');
+
+			const b = blocks[job];
+			b.style.display = '';
+			setBlock(b, SHELF[job].x, SHELF[job].y, 1);
+			b.removeAttribute('transform');
+			placed[job] = true;
+			placeDwellStart = 0;
+
+			retractFromPose = fkDeg(q);
+			pendingRetract = true;
+			freezePath(elapsed, now, POST_RELEASE_MS);
+		}
+
+		function checkPickPlace(elapsed, now) {
+			if (!firedTags.has('grasp')) tryGrasp(elapsed, now);
+			else if (!firedTags.has('release')) tryRelease(elapsed, now);
+		}
+
+		resetSourceBlocks(1);
+		applyArm(svg, q);
+
+		const tick = (now) => {
+			const dt = Math.min(48, Math.max(1, now - lastTick));
+			lastTick = now;
+
+			if (mode === 'warmup') {
+				moveArm(HOME_POSE, dt, 24, false, now);
+				if (now - phaseStart >= START_DELAY_MS) {
+					mode = 'intro';
+					phaseStart = now;
+				}
+			} else if (mode === 'intro') {
+				const t = smoothstep((now - phaseStart) / DUR.intro);
+				moveArm(HOME_POSE, dt, 24, false, now);
+				for (let i = 0; i < 3; i++) {
+					setBlock(blocks[i], sourcePos(i).x, sourcePos(i).y, t);
+					blocks[i].removeAttribute('transform');
+				}
+				if (now - phaseStart >= DUR.intro) {
+					q = [...HOME_ANGLES];
+					applyArm(svg, q);
+					phaseStart = now;
+					beginJob(0, HOME_POSE);
+				}
+			} else if (mode === 'run') {
+				const elapsed = now - pathStart;
+				const pick = blockTcp(sourcePos(job), PICK_PHI);
+				const place = blockTcp(SHELF[job], PLACE_PHI);
+				let target;
+
+				if (pendingRetract && pathHoldUntil <= now) {
+					pendingRetract = false;
+					retracting = true;
+					retractStart = now;
+				}
+
+				if (pendingRetract || (pathHoldUntil > now && firedTags.has('release'))) {
+					moveArm(place, dt, 32, true);
+				} else if (retracting) {
+					const rt = Math.min(1, (now - retractStart) / RETRACT_MS);
+					target = lerpPose(retractFromPose, placeRetractPose(), rt);
+					moveArm(target, dt, 32, false);
+					if (rt >= 1) {
+						retracting = false;
+						finishJob();
+					}
+				} else {
+					let pathElapsed = pathElapsedFor(
+						Math.min(elapsed, pathDuration(path)),
+						now,
+					);
+					target = samplePath(path, pathElapsed);
+					syncPathToArmLag(target, dt, now);
+					pathElapsed = pathElapsedFor(
+						Math.min(now - pathStart, pathDuration(path)),
+						now,
+					);
+					target = samplePath(path, pathElapsed);
+
+					const pickHold = !firedTags.has('grasp') && onPickHoldSegment(pathElapsed);
+					const placeHold =
+						firedTags.has('grasp') &&
+						!firedTags.has('release') &&
+						onPlaceHoldSegment(pathElapsed, place);
+
+					if (pickHold || pathHoldUntil > now) target = pick;
+					else if (placeHold) target = place;
+
+					const snap = pathHoldUntil > now || pickHold || placeHold;
+
+					moveArm(target, dt, 32, snap, now);
+					checkPickPlace(pathElapsed, now);
+
+					if (elapsed >= pathDuration(path) && !retracting && !pendingRetract) {
+						if (!firedTags.has('release')) moveArm(place, dt, 32, true);
+					}
+				}
+			} else if (mode === 'hold') {
+				moveArm(HOME_POSE, dt, 16);
+				for (let i = 0; i < 3; i++) {
+					if (placed[i]) setBlock(blocks[i], SHELF[i].x, SHELF[i].y, 1);
+				}
+				if (now - phaseStart >= DUR.hold) {
+					mode = 'fade';
+					phaseStart = now;
+					blocksReset = false;
+					carried.setAttribute('opacity', '0');
+				}
+			} else if (mode === 'fade') {
+				const t = smoothstep((now - phaseStart) / DUR.fade);
+
+				for (let i = 0; i < 3; i++) {
+					const op = placed[i] ? Math.max(0, 1 - t) : 1;
+					if (placed[i]) setBlock(blocks[i], SHELF[i].x, SHELF[i].y, op);
+				}
+
+				if (t > 0.32 && !blocksReset) {
+					blocksReset = true;
+					resetSourceBlocks(0);
+				}
+
+				const fadeHomeTau = t > 0.7 ? 30 : 16;
+				moveArm(HOME_POSE, dt, fadeHomeTau);
+
+				if (now - phaseStart >= DUR.fade) {
+					mode = 'wave';
+					phaseStart = now;
+					blocksReset = false;
+				}
+			} else if (mode === 'cycleIntro') {
+				const t = smoothstep((now - phaseStart) / DUR.cycleIntro);
+				moveArm(HOME_POSE, dt, 16);
+				for (let i = 0; i < 3; i++) {
+					setBlock(blocks[i], sourcePos(i).x, sourcePos(i).y, t);
+				}
+				if (now - phaseStart >= DUR.cycleIntro) {
+					phaseStart = now;
+					beginJob(0, HOME_POSE);
+				}
+			} else if (mode === 'wave') {
+				const elapsed = now - phaseStart;
+				const settling = elapsed < WAVE_SETTLE_MS;
+				const settleT = smoothstep(Math.min(1, elapsed / WAVE_SETTLE_MS));
+				const waveElapsed = Math.max(0, elapsed - WAVE_SETTLE_MS * 0.5);
+				const waveT = Math.min(
+					1,
+					waveElapsed / Math.max(1, DUR.wave - WAVE_SETTLE_MS * 0.5),
+				);
+				const waveGoal = [...HOME_ANGLES];
+				/* Ramp wrist swing in after settling at home — no joint snaps. */
+				waveGoal[3] = HOME_ANGLES[3] + Math.sin(waveT * Math.PI * 4) * 34 * settleT;
+				const tau = settling ? 40 : 52;
+				const cap = settling ? 1.35 : 2.4;
+				q = smoothFollowJoints(q, waveGoal, dt, tau);
+				q = rateLimitJoints(q, waveGoal, dt, cap);
+				applyArm(svg, q);
+
+				if (elapsed >= DUR.wave) {
+					mode = 'resetPause';
+					phaseStart = now;
+				}
+			} else if (mode === 'resetPause') {
+				moveArm(HOME_POSE, dt, 16);
+				if (now - phaseStart >= DUR.resetPause) {
+					startNextCycle(now);
+				}
+			}
+
+			requestAnimationFrame(tick);
+		};
+
+		requestAnimationFrame(tick);
+	}
+
+	function boot() {
+		const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+		const svgs = document.querySelectorAll('.arm-schematic');
+
+		for (const svg of svgs) {
+			if (reduced) {
+				const q = HOME_ANGLES;
+				applyArm(svg, q);
+				SHELF.forEach((p, i) => {
+					const b = svg.querySelector(`[data-block="${i}"]`);
+					if (b) setBlock(b, p.x, p.y, 1);
+				});
+			} else {
+				initPickPlace(svg);
+			}
+		}
+	}
+
+	boot();
+	document.addEventListener('astro:page-load', boot);
+</script>
 
 <style>
 	.arm-schematic {
-		width: min(260px, 60vw);
+		width: min(300px, 68vw);
 		height: auto;
 		display: block;
 		margin: 0 auto;
 		opacity: 0.85;
+	}
+
+	.shelf-board {
+		fill: rgba(255, 255, 255, 0.06);
+		stroke: rgba(255, 255, 255, 0.12);
+		stroke-width: 1;
+	}
+
+	.shelf-bracket {
+		stroke: rgba(255, 255, 255, 0.1);
+		stroke-width: 1.5;
+		stroke-linecap: round;
+	}
+
+	.source-pad {
+		fill: rgba(255, 255, 255, 0.03);
+		stroke: rgba(255, 255, 255, 0.08);
+		stroke-width: 1;
+	}
+
+	.block {
+		fill: rgba(91, 141, 239, 0.35);
+		stroke: var(--accent);
+		stroke-width: 1.5;
+	}
+
+	.block-carried {
+		fill: rgba(91, 141, 239, 0.55);
+		pointer-events: none;
 	}
 
 	.ring {
